@@ -38,6 +38,10 @@ void SetNonCanonicalMode(int fd, struct termios *savedattributes){
 vector<string> parseArgs(string input) {
     vector<string> args;
     string singleArg = "";
+
+    if(input.length() < 1) {
+        return args;
+    }
     for(int i = 0; i < input.length(); i++) {
         if(input[i] == 0x20 || input[i] == 0x0a) { // Space or Enter
             args.push_back(singleArg);
@@ -47,6 +51,7 @@ vector<string> parseArgs(string input) {
             singleArg += input[i];
         }
     }
+
 
     return args;
 }
@@ -109,6 +114,7 @@ void bckSpc() {
     write(STDOUT_FILENO, &backDelete, 1);
 }
 
+
 int main(int argc, char *argv[])
 {
     struct termios SavedTermAttributes;
@@ -127,21 +133,18 @@ int main(int argc, char *argv[])
 		read(STDIN_FILENO, &RXChar, 1); // Read in one at a time
         
 		if(0x04 == RXChar){ // C-d
-            printf("Here?");
 			break;
 		}
 
-        else if(0x1b == RXChar) // Escape Key
+        else if(0x1B == RXChar) // Escape Key
         { 
-            printf("Inside Escape");
             read(STDIN_FILENO, &RXChar, 1); // Bracket Key
-			if(0x05B == RXChar) 
-            { // Arrow Key
+			if(0x05B == RXChar) { // Arrow Key
 				read(STDIN_FILENO, &RXChar, 1);
 				switch(RXChar) 
                 {
-					case 0x41: // Up Arrow
-					{
+					case 0x41:
+                    {
                         if(upArrow.size() > 0) 
                         {
                             for(int i = 0; i < userInput.length(); i++) 
@@ -164,33 +167,32 @@ int main(int argc, char *argv[])
                             }
                         }
 
-                        else // Empty 
-                        {
+                        else // Empty
+                        { 
                             RXChar = '\a';
-				            write(STDOUT_FILENO, &RXChar, 1);
+                            write(STDOUT_FILENO, &RXChar, 1);
                         }
-                        // break;
-                    }
-                    
 
-                    // case 0x42: // Down Arrow
-                    // {
-                        
-                    //     break;
-                    // }
-                    
+                        break;
+                    }
+
+                    case 0x42:
+                    {
+
+                        break;
+                    }
                 }
             }
         }
 
-        else 
+        else
         {
             if(isprint(RXChar)) 
             {
                 write(STDOUT_FILENO, &RXChar, 1);
                 userInput += RXChar;
             }
-
+            #pragma region EnterStart
             else if(0x0a == RXChar) // Enter
             { 
                 string tmp;
@@ -198,6 +200,9 @@ int main(int argc, char *argv[])
                 { // Move everything from down to up
                     tmp = "";
                     tmp = downArrow.back();
+                    if(tmp == "") { // Will need to make sure empty is not added
+                        break; // We need to do a better safeguard for this
+                    }
                     upArrow.push_back(tmp);
                     downArrow.pop_back();
                 }
@@ -343,9 +348,9 @@ int main(int argc, char *argv[])
                 shellDir(); // Print Directory after everything is done.
             }
         }
+        #pragma endregion EnterEnd
 
         userInput = "";
-        
     }
 
     printf("Outside");
