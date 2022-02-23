@@ -35,7 +35,7 @@ void SetNonCanonicalMode(int fd, struct termios *savedattributes){
     tcsetattr(fd, TCSAFLUSH, &TermAttributes);
 }
 
-vector<string> parseArgs(string input) {
+vector<string> parseArgs(string input) { // Keep in mind: ">" and "|"
     vector<string> args;
     string singleArg = "";
 
@@ -51,8 +51,10 @@ vector<string> parseArgs(string input) {
             singleArg += input[i];
         }
     }
-
-
+    
+    if(singleArg.length() != 0) {
+        args.push_back(singleArg);
+    }
     return args;
 }
 
@@ -114,246 +116,202 @@ void bckSpc() {
     write(STDOUT_FILENO, &backDelete, 1);
 }
 
+void cd(vector<string> args) {
+    int errorVal;
+    if(args.size() > 1) {
+        errorVal = chdir(args[1].c_str()); // Changes directory to argument
+        if(errorVal == -1) {
+            perror("Directory could not be found."); // Change this message later
+        }
+        else {
+            pwd();
+        }
+    }
 
-int main(int argc, char *argv[])
-{
+    else // Only CD has been input
+    {
+        errorVal = chdir(getenv("HOME"));
+        if(errorVal == -1) 
+        {
+            perror("cd "); // Change this message later
+        }
+
+        else 
+        {
+            pwd();
+        }
+    }
+
+}
+
+bool runCmd(vector<string> args) {
+    if(args[0].compare("pwd") == 0) {
+        pwd();
+    }
+
+    else if(args[0].compare("ls") == 0) {
+
+    }
+
+    else if(args[0].compare("cd") == 0) {
+        
+    }
+
+    else if(args[0].compare("exit") == 0) {
+        // ls();
+        return false;
+    }
+
+    else {
+        string error = "command not found: " + args[0] + "\n";
+        for(int i = 0; i < error.length(); i++) {
+            write(STDOUT_FILENO, &error[i], 1);
+        }
+    }
+    return true;
+}
+
+
+int main(int argc, char *argv[]) {
     struct termios SavedTermAttributes;
     char RXChar;
 	string userInput = "";
     vector<string> upArrow, downArrow;
-
-    shellDir();
+    bool isRunning = true; 
 
     SetNonCanonicalMode(STDIN_FILENO, &SavedTermAttributes);
-
+    
+    shellDir();
     // We need printable, arrow keys and break statement
 
-    while(1)
-    { // Read in the characters individually
+    while(isRunning) { // Read in the characters individually
 		read(STDIN_FILENO, &RXChar, 1); // Read in one at a time
         
-		if(0x04 == RXChar){ // C-d
-			break;
-		}
+		if(0x04 == RXChar) {
+            break;
+        }
 
-        else if(0x1B == RXChar) // Escape Key
-        { 
-            read(STDIN_FILENO, &RXChar, 1); // Bracket Key
-			if(0x05B == RXChar) { // Arrow Key
-				read(STDIN_FILENO, &RXChar, 1);
-				switch(RXChar) 
-                {
-					case 0x41:
-                    {
-                        if(upArrow.size() > 0) 
-                        {
-                            for(int i = 0; i < userInput.length(); i++) 
-                            {
-                                if(userInput[i] == 0x0a) // just in case of \n
-                                    break;
+        else if(0x01B == RXChar) { // Escape Key
+            read(STDIN_FILENO, &RXChar, 1);
+            if(0x05B == RXChar) {
+                read(STDIN_FILENO, &RXChar, 1);
+                switch(RXChar) {
+                    case 0x41: { // Up Arrow
+                        if(upArrow.size() > 0) {
+
+                            downArrow.push_back(userInput);
+
+                            for(int i = 0; i < userInput.length(); i++) { // Clear input
                                 bckSpc();
                             }
 
-                            downArrow.push_back(userInput);
                             userInput = upArrow.back();
-                            char tmpC;
 
-                            for(int i = 0; i < userInput.length(); i++) 
-                            { // Write out the entire line
-                                if(userInput[i] == 0x0a) // Enter means stop
-                                    break;
-                                tmpC = userInput[i];
-                                write(STDOUT_FILENO, &tmpC, 1);
+                            for(int i = 0; i < userInput.length(); i++) { // Replace input with next command
+                                write(STDOUT_FILENO, &userInput[i], 1);
                             }
+
+                            upArrow.pop_back();
                         }
 
-                        else // Empty
-                        { 
-                            RXChar = '\a';
-                            write(STDOUT_FILENO, &RXChar, 1);
+                        else {
+                            char bell = '\a'; // Bell
+                            write(STDOUT_FILENO, &bell, 1);
                         }
 
                         break;
                     }
 
-                    case 0x42:
-                    {
+                    case 0x42: { // Down Arrow
+                        if(downArrow.size() > 0) {
+                            for(int i = 0; i < userInput.length(); i++) { // Clear input
+                                bckSpc();
 
+                            }
+
+                            upArrow.push_back(userInput);
+                            userInput = downArrow.back();
+
+                            for(int i = 0; i < userInput.length(); i++) {
+                                write(STDOUT_FILENO, &userInput[i], 1);
+                            }
+
+                            downArrow.pop_back();
+                        }
+
+                        else {
+                            char bell = '\a'; // Bell
+                            write(STDOUT_FILENO, &bell, 1);
+                        }
                         break;
                     }
+
                 }
-            }
-        }
 
-        else
-        {
-            if(isprint(RXChar)) 
-            {
+            }
+        } // End of Arrow Keys
+
+        else {
+            if(isprint(RXChar)) {
+                // Printable Characters
                 write(STDOUT_FILENO, &RXChar, 1);
                 userInput += RXChar;
             }
-            #pragma region EnterStart
-            else if(0x0a == RXChar) // Enter
-            { 
-                string tmp;
-                while(downArrow.size() > 1) 
-                { // Move everything from down to up
-                    tmp = "";
-                    tmp = downArrow.back();
-                    if(tmp == "") { // Will need to make sure empty is not added
-                        break; // We need to do a better safeguard for this
-                    }
-                    upArrow.push_back(tmp);
-                    downArrow.pop_back();
-                }
 
-                upArrow.push_back(userInput); // Do we do up arrow first 
-                userInput = userInput + RXChar;
-
-                vector<string> commandArgs;
-                commandArgs = parseArgs(userInput);
-                
-                write(STDOUT_FILENO, &RXChar, 1); // Write out to the console
-
-                if(commandArgs[0] == "cd") 
-                {
-                    int errorVal;
-                    if(commandArgs.size() > 1) { // What do we do if 
-                        errorVal = chdir(commandArgs[1].c_str()); // Changes directory to argument
-                        if(errorVal == -1) {
-                            perror("Directory could not be found."); // Change this message later
-                        }
-                        else {
-                            pwd();
-                        }
-                    }
-
-                    else 
-                    {
-                        errorVal = chdir(getenv("HOME"));
-                        if(errorVal == -1) 
-                        {
-                            perror("cd "); // Change this message later
-                        }
-
-                        else 
-                        {
-                            pwd();
-                        }
-                    }
-                }
-
-                else if(commandArgs[0] == "ls") 
-                {
-                    if(commandArgs.size() > 1) // Go to location and list files
-                    { 
-                        // Here is where we probably need to pipe to send something to go look
-                        // This will first have to create a pipe that will go to a new area and then
-                        // retrieve the files/directories and return that string back
-                        // There are probably other work arounds but we should do this one.
+            else {
+                switch(RXChar) {
+                    case 0x7f:
+                    case 0x08: { // Backspace
                         
-                        // 1. Create two pipes
-                        // 2. Use pipes for ls:
-                        // 2a. Parent will wait for child
-                        // 2b. Child is considered its own process, changes directory, returns string of files
-                        // 2c. Parent uses string from pipe to print out list and information
-
-                        int fd1[2]; // Stores both ends of Parent, read: 0 write: 1
-                        int fd2[2]; // Stores both ends of Child, read: 0 write: 1
-                        pid_t proc;
-
-                        if(pipe(fd1) == -1) 
-                        {
-                            fprintf(stderr, "Pipe 1 failed"); // DEBUG: Change to write
-                            break;
+                        if(userInput.length() > 0) {
+                            userInput.pop_back();
+                            bckSpc();
                         }
-
-                        if(pipe(fd2) == -1) 
-                        {
-                            fprintf(stderr, "Pipe 2 failed"); // DEBUG: Change to write
-                            break;
+                        
+                        else { // Cannot backspace
+                            char bell = '\a'; // Bell
+                            write(STDOUT_FILENO, &bell, 1);
                         }
-
-                        proc = fork();
-
-                        if(proc < 0) 
-                        { // Process did not fork
-                            fprintf(stderr, "Fork failed"); // DEBUG: Change to write
-                        }
-
-                        else if(proc > 0) 
-                        { // Parent Process enters here
-                            // Does parent write the directory to the child and waits
-                            // Child returns with string then finishes its process. But when does it terminate?
-
-                            close(fd1[0]); // Close off reading side
-
-                        }
-
-                        else 
-                        { // Child process enters here
-                            // Goal is to go to directory and then 
-                            close(fd1[1]); // Close off the writing end of Pipe 1
-                        }
-
+                        break;
                     }
 
-                    else 
-                    { // List current working directory files
-                        struct dirent *directEntry;
-                        DIR *dirPtr = opendir(".");
-
-                        if(dirPtr == NULL) 
-                        {
-                            perror("ls"); // Failed to find directory
+                    case 0x0A: { // Return(Enter) case
+                        if(userInput.compare("") == 0) { // If empty string submitted
+                            continue;
                         }
 
-                        while ((directEntry = readdir(dirPtr)) != NULL) 
-                        {
-                            printf("%s\n", directEntry->d_name); // Prints out all files, might need formatting
+                        char newline = '\n';
+                        write(STDOUT_FILENO, &newline, 1);
+
+                        // Parse arguments into individual commands
+                        vector<string> cmdArgs;
+                        cmdArgs = parseArgs(userInput);
+                        isRunning = runCmd(cmdArgs);
+                        string tmp;
+                        
+                        while(downArrow.size() > 1) { 
+                            // Put everything back into history except for command not submitted
+                            tmp = downArrow.back();
+                            upArrow.push_back(tmp);
+                            downArrow.pop_back();
                         }
+
+                        if(downArrow.size() == 1) {
+                            downArrow.pop_back();
+                        }
+
+                        // First we need to clear out the down arrow first right? Check if 
+                        upArrow.push_back(userInput);
+
+
+                        userInput = ""; // Reset once done
+                        shellDir(); // Print current directory again
+                        break;
                     }
                 }
-
-                else if(commandArgs[0] == "pwd") 
-                {
-                    pwd(); // This might need to be changed later for pipe
-                    // pwd might need a second function that does not print but returns a string
-                }
-
-                else if(commandArgs[0] == "ff") 
-                {
-                    // Similar to ls but it lists the paths to a file if it finds the name of it.
-                    // i.e. ff(command) main.cpp(filename) ECS150(directory) will print the directory
-                    // of any main.cpp in any subdirectories, starting in the given directory
-                }
-
-                else if(commandArgs[0] == "exit") 
-                {
-                    // Might need to reset some flags or deconstruct things here.
-                    break; // This needs to go back into Canonical Mode
-                }
-
-                else 
-                {
-                    string notFound = "";
-                    char newLine = 0x0a;
-                    notFound = commandArgs[0] + " is not a command."; // This needs to be changed to actual prompt
-                    for(int i = 0; i < notFound.size(); i++) 
-                    {
-                        write(STDOUT_FILENO, &notFound[i], 1);
-                    }
-                    write(STDOUT_FILENO, &newLine, 1);
-                }
-                shellDir(); // Print Directory after everything is done.
             }
-        }
-        #pragma endregion EnterEnd
-
-        userInput = "";
-    }
-
-    printf("Outside");
+        } // End for Print Char and Enter
+    } // End of While Loop
 
     ResetCanonicalMode(STDIN_FILENO, &SavedTermAttributes);
     return 0;
