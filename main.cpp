@@ -38,13 +38,15 @@ void SetNonCanonicalMode(int fd, struct termios *savedattributes){
 vector<string> parseArgs(string input) { // Keep in mind: ">" and "|"
     vector<string> args;
     string singleArg = "";
-
-    if(input.length() < 1) {
-        return args;
-    }
+    
     for(int i = 0; i < input.length(); i++) {
         if(input[i] == 0x20 || input[i] == 0x0a) { // Space or Enter
-            args.push_back(singleArg);
+            if(singleArg.compare("") != 0) // In case of a bunch of spaces
+            {
+                args.push_back(singleArg);
+            }
+            
+            
             singleArg = "";
         }
         else {
@@ -52,7 +54,7 @@ vector<string> parseArgs(string input) { // Keep in mind: ">" and "|"
         }
     }
     
-    if(singleArg.length() != 0) {
+    if(singleArg.length() != 0) { // Push the last one if it exists
         args.push_back(singleArg);
     }
     return args;
@@ -158,7 +160,6 @@ bool runCmd(vector<string> args) {
     }
 
     else if(args[0].compare("exit") == 0) {
-        // ls();
         return false;
     }
 
@@ -276,35 +277,43 @@ int main(int argc, char *argv[]) {
                     }
 
                     case 0x0A: { // Return(Enter) case
-                        if(userInput.compare("") == 0) { // If empty string submitted
-                            continue;
-                        }
-
                         char newline = '\n';
                         write(STDOUT_FILENO, &newline, 1);
 
+                        if(userInput.compare("") != 0) { // If empty string submitted
+                            vector<string> cmdArgs;
+                            cmdArgs = parseArgs(userInput);
+                            
+                            if(cmdArgs.size() != 0) {
+                                isRunning = runCmd(cmdArgs);
+                            }
+                           
+                            if(!isRunning) { // We might have to change how this exits depending on child. Not sure.
+                                break;
+                            }
+
+                            string tmp;
+                            
+                            while(downArrow.size() > 1) { 
+                                // Put everything back into history except for command not submitted
+                                tmp = downArrow.back();
+                                upArrow.push_back(tmp);
+                                downArrow.pop_back();
+                            }
+
+                            if(downArrow.size() == 1) {
+                                downArrow.pop_back();
+                            }
+
+                            // First we need to clear out the down arrow first right? Check if 
+                            upArrow.push_back(userInput);
+
+
+                            userInput = ""; // Reset once done
+                        }
+
                         // Parse arguments into individual commands
-                        vector<string> cmdArgs;
-                        cmdArgs = parseArgs(userInput);
-                        isRunning = runCmd(cmdArgs);
-                        string tmp;
-                        
-                        while(downArrow.size() > 1) { 
-                            // Put everything back into history except for command not submitted
-                            tmp = downArrow.back();
-                            upArrow.push_back(tmp);
-                            downArrow.pop_back();
-                        }
 
-                        if(downArrow.size() == 1) {
-                            downArrow.pop_back();
-                        }
-
-                        // First we need to clear out the down arrow first right? Check if 
-                        upArrow.push_back(userInput);
-
-
-                        userInput = ""; // Reset once done
                         shellDir(); // Print current directory again
                         break;
                     }

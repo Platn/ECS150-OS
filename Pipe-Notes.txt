@@ -1,0 +1,20 @@
+Parent: 
+Close P1R
+Write to P1W
+Close P1W
+Wait for Child
+
+Child:
+Close P1W
+Read P1R
+Close P1R
+Close P2R
+Write to Pipe2
+Close P2W
+Exit
+
+Parent:
+Close P2W
+Read P2R
+Process Info
+Close P2R
