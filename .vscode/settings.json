@@ -4,6 +4,8 @@
         "__string": "c",
         "string": "c",
         "string_view": "c",
-        "vector": "cpp"
+        "vector": "cpp",
+        "queue": "cpp",
+        "iosfwd": "cpp"
     }
 }
