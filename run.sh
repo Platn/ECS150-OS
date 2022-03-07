@@ -1,2 +1,2 @@
 make
-./sample
+./sample.o

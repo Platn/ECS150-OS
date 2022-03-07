@@ -122,8 +122,8 @@ void bckSpc() {
 
 void pwd(queue<string>* args) { // In here, we might need to pop the queue itself.
     args->pop(); // Take pwd out of the vector
-    string argSize = "Args Size: " + to_string(args->size()) + "\n";
-    writeC(argSize);
+    // string argSize = "Args Size: " + to_string(args->size()) + "\n";
+    // writeC(argSize);
 
     char tmp[256];
     getcwd(tmp, 256);
@@ -222,8 +222,8 @@ void pwd(queue<string>* args) { // In here, we might need to pop the queue itsel
         write(STDOUT_FILENO, &newLine, 1);
     }
     
-    argSize = "Args Size Fin: " + to_string(args->size()) + "\n";
-    writeC(argSize);
+    // argSize = "Args Size Fin: " + to_string(args->size()) + "\n";
+    // writeC(argSize);
 }
 
 void cd(queue<string>* args) { // Change Directory
@@ -534,13 +534,31 @@ void ff(queue<string>* args) {
 
     // args->pop();
     FileFinder findFiles;
+    if(args->size() == 0) {
+        writeC("\nError: No file specified."); // Placeholder
+        return;
+    }
+
     string fileName = args->front();
-    writeC("\nFilename: " + fileName);
+    // writeC("\nFilename: " + fileName);
     args->pop();
-    string dirName = args->front();
-    writeC("\nDirname: " + dirName);
-    args->pop();
-    findFiles.startSearch(fileName, dirName); // It allows access to these 
+    string dirName;
+    
+    if(args->size() == 0) {
+        char tmp[256];
+        getcwd(tmp, 256);
+        dirName = tmp;
+    }
+
+    else {
+        dirName = args->front();
+        args->pop();
+    }
+    
+    
+    // writeC("\nDirname: " + dirName);
+    
+    findFiles.startSearch(fileName, dirName); // It allows access to these
     // For this it would just be pop arg pop arg right if it were a queue?
 
     
@@ -567,7 +585,7 @@ bool runCmd(queue<string>* args) { // These functions will need to have string r
             // Pwd probably needs to be reconstructed since it can be piped into anything
             pwd(args);
             // args->pop();
-            writeC("Arg Size Outer: " + to_string(args->size()));
+            // writeC("Arg Size Outer: " + to_string(args->size()));
         }
 
         else if(args->front().compare("ls") == 0) {
@@ -608,7 +626,7 @@ int main(int argc, char *argv[]) {
     struct termios SavedTermAttributes;
     char RXChar;
 	string userInput = "";
-    vector<string> upArrow, downArrow;
+    vector<string> upArrow, downArrow, history;
     bool isRunning = true; 
 
     SetNonCanonicalMode(STDIN_FILENO, &SavedTermAttributes);
@@ -629,20 +647,52 @@ int main(int argc, char *argv[]) {
                 read(STDIN_FILENO, &RXChar, 1);
                 switch(RXChar) {
                     case 0x41: { // Up Arrow
-                        if(upArrow.size() > 0) {
+                        if(history.size() > 0) {
+                            // It must have some sort of history.
+                            if(upArrow.size() > 0) {
 
-                            downArrow.push_back(userInput);
+                                downArrow.push_back(userInput);
 
-                            for(int i = 0; i < userInput.length(); i++) { // Clear input
-                                bckSpc();
+                                for(int i = 0; i < userInput.length(); i++) { // Clear input
+                                    bckSpc();
+                                }
+
+                                userInput = upArrow.back();
+
+                                for(int i = 0; i < userInput.length(); i++) { // Replace input with next command
+                                    write(STDOUT_FILENO, &userInput[i], 1);
+                                }
+                                upArrow.pop_back();
                             }
 
-                            userInput = upArrow.back();
-
-                            for(int i = 0; i < userInput.length(); i++) { // Replace input with next command
-                                write(STDOUT_FILENO, &userInput[i], 1);
+                            else if(upArrow.size() == 0 && downArrow.size() > 0) {
+                                // Down arrow holds all of it
+                                char bell = '\a'; // Bell
+                                write(STDOUT_FILENO, &bell, 1);
                             }
-                            upArrow.pop_back();
+
+                            else {
+                                // UpArrow has size of 0 and history will fill it is the goal
+
+                                for(int i = 0; i < history.size(); i++) {
+                                    upArrow.push_back(history[i]);
+                                }
+
+                                downArrow.push_back(userInput);
+
+                                for(int i = 0; i < userInput.length(); i++) { // Clear input
+                                    bckSpc();
+                                }
+
+                                userInput = upArrow.back();
+
+                                for(int i = 0; i < userInput.length(); i++) { // Replace input with next command
+                                    write(STDOUT_FILENO, &userInput[i], 1);
+                                }
+
+                                upArrow.pop_back();
+                                
+                            }
                         }
 
                         else {
@@ -657,7 +707,6 @@ int main(int argc, char *argv[]) {
                         if(downArrow.size() > 0) {
                             for(int i = 0; i < userInput.length(); i++) { // Clear input
                                 bckSpc();
-
                             }
 
                             upArrow.push_back(userInput);
@@ -714,6 +763,15 @@ int main(int argc, char *argv[]) {
                             queue<string>* cmdArgs;
                             cmdArgs = new queue<string>;
                             cmdArgs = parseArgs(userInput);
+                            // Push to history and clear out both arrows
+                            history.push_back(userInput); 
+                            while(upArrow.size() > 0) {
+                                upArrow.pop_back();
+                            }
+
+                            while(downArrow.size() > 0) {
+                                downArrow.pop_back();
+                            }
                             
                             
                             if(cmdArgs->size() != 0) {
@@ -733,21 +791,10 @@ int main(int argc, char *argv[]) {
                                 break;
                             }
 
-                            string tmp;
                             
-                            while(downArrow.size() > 1) { 
-                                // Put everything back into history except for command not submitted
-                                tmp = downArrow.back();
-                                upArrow.push_back(tmp);
-                                downArrow.pop_back();
-                            }
-
-                            if(downArrow.size() == 1) {
-                                downArrow.pop_back();
-                            }
-
                             // First we need to clear out the down arrow first right? Check if 
-                            upArrow.push_back(userInput);
+
+                            
                             userInput = ""; // Reset once done
                             cmdArgs = NULL;
                             delete cmdArgs;
